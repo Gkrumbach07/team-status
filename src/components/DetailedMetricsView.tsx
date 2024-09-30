@@ -1,3 +1,5 @@
+'use client'
+
 /* eslint-disable @next/next/no-img-element */
 import React, { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -7,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Button } from './ui/button';
 import { format, parseISO, startOfDay, startOfMonth, isValid, eachDayOfInterval, eachMonthOfInterval } from 'date-fns';
 import ErrorBoundary from './ErrorBoundary';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface DetailedMetricsViewProps {
   metric: keyof Metrics;
@@ -19,6 +22,7 @@ type AggregationType = 'sprint' | 'day' | 'month';
 
 export default function DetailedMetricsView({ metric, data, sprintNames, allDates }: DetailedMetricsViewProps) {
   const [aggregationType, setAggregationType] = useState<AggregationType>('sprint');
+  const { settings } = useSettings(); // Add this line to get settings
 
   const sortedData = useMemo(() => 
     [...data].sort((a, b) => new Date(a.date || '').getTime() - new Date(b.date || '').getTime()),
@@ -171,7 +175,7 @@ export default function DetailedMetricsView({ metric, data, sprintNames, allDate
                 </TableCell>
                 <TableCell>
                   <Button variant="link" asChild>
-                    <a href={`https://${process.env.JIRA_HOST}/browse/${item.jiraId}`} target="_blank" rel="noopener noreferrer">
+                    <a href={`https://${settings.JIRA_HOST}/browse/${item.jiraId}`} target="_blank" rel="noopener noreferrer">
                       {item.jiraId}
                     </a>
                   </Button>
@@ -182,7 +186,7 @@ export default function DetailedMetricsView({ metric, data, sprintNames, allDate
                 <TableCell>
                   {item.prId && (
                     <Button variant="link" asChild>
-                      <a href={`https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/pull/${item.prId}`} target="_blank" rel="noopener noreferrer">
+                      <a href={`https://github.com/${settings.GITHUB_OWNER}/${settings.GITHUB_REPO}/pull/${item.prId}`} target="_blank" rel="noopener noreferrer">
                         {item.prId}
                       </a>
                     </Button>

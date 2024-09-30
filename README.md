@@ -1,45 +1,64 @@
 # Sprint Metrics Dashboard
 
-This project is a dashboard for visualizing sprint metrics, integrating data from Jira and GitHub.
+This is a Next.js application that provides a dashboard for tracking sprint metrics across GitHub and Jira.
 
-## Development Setup
+## Features
+
+- Fetch and display metrics for selected sprints
+- Visualize data with charts and tables
+- Configurable settings for GitHub and Jira integration
+- Responsive design for various screen sizes
+
+## Prerequisites
+
+- Node.js (version 14 or later)
+- npm or yarn
+- A GitHub account with access to the repository you want to track
+- A Jira account with access to the board you want to track
+
+## Setup
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/sprint-metrics-dashboard.git
+   git clone https://github.com/yourusername/sprint-metrics-dashboard.git
    cd sprint-metrics-dashboard
    ```
 
 2. Install dependencies:
    ```
    npm install
+   # or
+   yarn install
    ```
 
-3. Copy the `.env.example` file to `.env.local`:
-   ```
-   cp .env.example .env.local
-   ```
-
-4. Edit `.env.local` and fill in your environment variables (see Environment Variables section below). You can also edit these envs in the settings.
-
-5. Run the development server:
+3. Run the development server:
    ```
    npm run dev
+   # or
+   yarn dev
    ```
 
-6. Open [http://localhost:3000](http://localhost:3000) in your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Environment Variables
+## Configuration
 
-The following environment variables need to be set in your `.env.local` file:
-- `GITHUB_TOKEN`: GitHub personal access token for API authentication
-- `JIRA_ACCESS_TOKEN`: Jira API access token for authentication
-- `JIRA_HOST`: Jira instance hostname
-- `GITHUB_OWNER`: GitHub repository owner (organization or user)
-- `GITHUB_REPO`: GitHub repository name
-- `JIRA_BOARD_ID`: Jira board ID for the project
+When you first run the application, you'll be prompted to enter your settings. These include:
 
-These values are stored in your localstorage too for convenience.
+- GitHub Token
+- Jira Access Token
+- Jira Host
+- GitHub Owner
+- GitHub Repository
+- Jira Board ID
+
+These settings are stored locally in your browser and can be updated at any time through the settings modal.
+
+## Usage
+
+1. Configure your settings when prompted or by clicking the settings icon.
+2. Select the sprints you want to analyze using the sprint selector.
+3. Click "Fetch Metrics" to retrieve and display the data.
+4. Use the various views and charts to analyze your sprint metrics.
 
 ## Metrics Explanation
 

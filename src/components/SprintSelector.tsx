@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/popover"
 import { fetchSprints } from '@/app/actions'
 import { CommandList } from 'cmdk'
+import { useSettings } from '@/contexts/SettingsContext'
 
 interface SprintSelectorProps {
   onSelect: (sprints: Sprint[]) => void
@@ -34,11 +35,12 @@ export default function SprintSelector({ onSelect, selectedSprints }: SprintSele
   const [sprints, setSprints] = useState<Sprint[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { settings } = useSettings()
 
   useEffect(() => {
     async function loadSprints() {
       try {
-        const fetchedSprints = await fetchSprints()
+        const fetchedSprints = await fetchSprints(settings)
         if (Array.isArray(fetchedSprints) && fetchedSprints.length > 0) {
           setSprints(fetchedSprints)
         } else {
@@ -53,7 +55,7 @@ export default function SprintSelector({ onSelect, selectedSprints }: SprintSele
     }
 
     loadSprints()
-  }, [])
+  }, [settings])
 
   const handleSelect = (sprint: Sprint) => {
     const updatedSprints = selectedSprints.some(s => s.value === sprint.value)
@@ -88,28 +90,28 @@ export default function SprintSelector({ onSelect, selectedSprints }: SprintSele
       <PopoverContent className="w-[200px] p-0">
         <Command>
           <CommandInput placeholder="Search sprints..." />
-          <CommandList>
-          <CommandEmpty>No sprint found.</CommandEmpty>
-          <CommandGroup>
-            {sprints.length > 0 ? (
-              sprints.map((sprint) => (
-                <CommandItem
-                  key={sprint.value}
-                  onSelect={() => handleSelect(sprint)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      selectedSprints.some(s => s.value === sprint.value) ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {sprint.label}
-                </CommandItem>
-              ))
-            ) : (
-              <CommandItem disabled>No sprints available</CommandItem>
-            )}
-          </CommandGroup>
+          <CommandList className="max-h-[200px] overflow-y-auto">
+            <CommandEmpty>No sprint found.</CommandEmpty>
+            <CommandGroup>
+              {sprints.length > 0 ? (
+                sprints.map((sprint) => (
+                  <CommandItem
+                    key={sprint.value}
+                    onSelect={() => handleSelect(sprint)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        selectedSprints.some(s => s.value === sprint.value) ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {sprint.label}
+                  </CommandItem>
+                ))
+              ) : (
+                <CommandItem disabled>No sprints available</CommandItem>
+              )}
+            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>

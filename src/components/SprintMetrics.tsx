@@ -1,100 +1,48 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import SprintSelector from './SprintSelector'
 import TeamMetricsTable from './TeamMetricsTable'
 import SprintSummary from './SprintSummary'
-import { EnvVars, SettingsModal } from './SettingsModal'
+import { SettingsModal } from './SettingsModal'
 import { SelectedSprintChips } from './SelectedSprintChips'
 import { Metrics, SprintSummary as SprintSummaryType } from '@/types/metrics'
-import { Settings } from 'lucide-react'
-import { saveToLocalStorage, loadFromLocalStorage } from '@/utils/localStorage'
+import { Settings as SettingsIcon } from 'lucide-react'
+import { useSettings } from '@/contexts/SettingsContext';
+import { InitialSetup } from './InitialSetup'
 
 interface Sprint {
   value: string;
   label: string;
 }
 
-const defaultVisibleColumns = [
-  'pointsCompleted', 'jirasCompleted', 'avgTimeToMergePR', 'reviewsGiven',
-  'qaValidations', 'avgReviewComments', 'avgTimeInProgress', 'reviewCommentsGiven', 'avgTimeToQAContact',
-  'bugCount', 'storyCount', 'taskCount', 'subTaskCount'
-];
-
 export default function SprintMetrics() {
-  const [selectedSprints, setSelectedSprints] = useState<Sprint[]>([])
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(defaultVisibleColumns)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [showIndividualContributions, setShowIndividualContributions] = useState(true)
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
-  const [loadedFromLocalStorage, setLoadedFromLocalStorage] = useState(false);
-  const [envVars, setEnvVars] = useState<Partial<EnvVars>>({});
-  const [initialEnvVars, setInitialEnvVars] = useState<Partial<EnvVars>>({});
+  const { settings, updateSettings } = useSettings();
 
-  useEffect(() => {
-    const fetchInitialEnvVars = async () => {
-      try {
-        const response = await fetch('/api/getEnvVars');
-        if (response.ok) {
-          const envVars = await response.json();
-          setInitialEnvVars(envVars);
-        }
-      } catch (error) {
-        console.error('Error fetching initial env vars:', error);
-      }
-    };
+  const areSettingsConfigured = () => {
+    return !!(
+      settings.GITHUB_TOKEN &&
+      settings.JIRA_ACCESS_TOKEN &&
+      settings.JIRA_HOST &&
+      settings.GITHUB_OWNER &&
+      settings.GITHUB_REPO &&
+      settings.JIRA_BOARD_ID
+    );
+  };
 
-    fetchInitialEnvVars();
-  }, []);
-
-  useEffect(() => {
-    const loadedSprints = loadFromLocalStorage('selectedSprints', []) as Sprint[];
-    const loadedColumns = loadFromLocalStorage('visibleColumns', defaultVisibleColumns) as string[];
-    const loadedShowIndividual = loadFromLocalStorage('showIndividualContributions', true) as boolean;
-    const loadedEnvVars = loadFromLocalStorage('envVars', {}) as Partial<EnvVars>;
-
-    setSelectedSprints(loadedSprints);
-    setVisibleColumns(loadedColumns);
-    setShowIndividualContributions(loadedShowIndividual);
-    setEnvVars({ ...initialEnvVars, ...loadedEnvVars });
-    setLoadedFromLocalStorage(true);
-  }, [initialEnvVars])
-
-  useEffect(() => {
-    if (loadedFromLocalStorage) {
-      console.log('Saving selectedSprints to localStorage:', selectedSprints);
-      saveToLocalStorage('selectedSprints', selectedSprints)
-    }
-  }, [loadedFromLocalStorage, selectedSprints])
-
-  useEffect(() => {
-    if (loadedFromLocalStorage) {
-      saveToLocalStorage('visibleColumns', visibleColumns)
-    }
-  }, [loadedFromLocalStorage, visibleColumns])
-
-  useEffect(() => {
-    if (loadedFromLocalStorage) {
-      saveToLocalStorage('showIndividualContributions', showIndividualContributions)
-    }
-  }, [loadedFromLocalStorage, showIndividualContributions])
-
-  const handleFetchMetrics = async () => {
-    if (selectedSprints.length === 0) {
-      setError('Please select at least one sprint')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setProgress(0)
-    setStatus('Fetching metrics...')
+  const fetchMetricsData = async () => {
+    setLoading(true);
+    setError(null);
+    setProgress(0);
+    setStatus('Fetching metrics...');
 
     try {
       const response = await fetch('/api/fetchMetrics', {
@@ -102,9 +50,9 @@ export default function SprintMetrics() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          sprints: selectedSprints.map(sprint => sprint.value),
-          envVars // Pass the environment variables to the API
+        body: JSON.stringify({
+          sprints: settings.selectedSprints.map(sprint => sprint.value),
+          settings: settings,
         }),
       });
 
@@ -147,84 +95,85 @@ export default function SprintMetrics() {
         }
       }
     } catch (error) {
-      console.error('Error fetching metrics:', error)
-      setError('Failed to fetch metrics')
+      console.error('Error fetching metrics:', error);
+      setError('Failed to fetch metrics. Please try again.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleRemoveSprint = (sprintValue: string) => {
-    setSelectedSprints(prevSprints => prevSprints.filter(s => s.value !== sprintValue));
+    updateSettings({
+      selectedSprints: settings.selectedSprints.filter(sprint => sprint.value !== sprintValue)
+    });
   }
 
   const handleSelectSprints = (sprints: Sprint[]) => {
-    console.log('Selecting sprints:', sprints);
-    setSelectedSprints(sprints);
+    updateSettings({ selectedSprints: sprints });
+  }
+
+  const handleColumnToggle = (column: string) => {
+    updateSettings({
+      visibleColumns: settings.visibleColumns.includes(column)
+        ? settings.visibleColumns.filter(col => col !== column)
+        : [...settings.visibleColumns, column]
+    });
   }
 
   const calculateSummary = (metrics: Metrics): SprintSummaryType => {
     const totalPointsCompleted = metrics.pointsCompleted.reduce((sum, point) => sum + (point.value || 0), 0);
     const totalJirasCompleted = metrics.jirasCompleted.length;
-    const avgTimeToMergePR = metrics.timeToMergePR.length > 0
-      ? metrics.timeToMergePR.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.timeToMergePR.length
-      : 0;
-    const totalReviews = metrics.reviewsGiven.length;
+    const avgTimeToMergePR = metrics.timeToMergePR.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.timeToMergePR.length;
+    const totalReviewsGiven = metrics.reviewsGiven.length;
     const totalQAValidations = metrics.qaValidations.length;
-    const avgReviewComments = metrics.reviewComments.length > 0
-      ? metrics.reviewComments.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.reviewComments.length
-      : 0;
-    const avgTimeInProgress = metrics.timeInProgress.length > 0
-      ? metrics.timeInProgress.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.timeInProgress.length
-      : 0;
+    const avgReviewComments = metrics.reviewComments.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.reviewComments.length;
+    const avgTimeInProgress = metrics.timeInProgress.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.timeInProgress.length;
     const totalReviewCommentsGiven = metrics.reviewCommentsGiven.reduce((sum, point) => sum + (point.value || 0), 0);
-    const avgTimeToQAContact = metrics.timeToQAContact.length > 0
-      ? metrics.timeToQAContact.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.timeToQAContact.length
-      : 0;
+    const avgTimeToQAContact = metrics.timeToQAContact.reduce((sum, point) => sum + (point.value || 0), 0) / metrics.timeToQAContact.length;
+    const totalBugCount = metrics.bugCount.length;
+    const totalStoryCount = metrics.storyCount.length;
+    const totalTaskCount = metrics.taskCount.length;
+    const totalSubTaskCount = metrics.subTaskCount.length;
 
     return {
       pointsCompleted: totalPointsCompleted,
       jirasCompleted: totalJirasCompleted,
       avgTimeToMergePR,
-      reviewsGiven: totalReviews,
+      reviewsGiven: totalReviewsGiven,
       qaValidations: totalQAValidations,
       avgReviewComments,
       avgTimeInProgress,
       reviewCommentsGiven: totalReviewCommentsGiven,
       avgTimeToQAContact,
-      bugCount: metrics.bugCount.length,
-      storyCount: metrics.storyCount.length,
-      taskCount: metrics.taskCount.length,
-      subTaskCount: metrics.subTaskCount.length,
+      bugCount: totalBugCount,
+      storyCount: totalStoryCount,
+      taskCount: totalTaskCount,
+      subTaskCount: totalSubTaskCount,
     };
-  }
+  };
 
-  const handleColumnToggle = (column: string) => {
-    setVisibleColumns(prev => 
-      prev.includes(column) 
-        ? prev.filter(col => col !== column)
-        : [...prev, column]
-    )
+  if (!areSettingsConfigured()) {
+    return <InitialSetup />;
   }
 
   return (
     <div className="space-y-4 relative">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-2">
-          <SprintSelector onSelect={handleSelectSprints} selectedSprints={selectedSprints} />
+          <SprintSelector onSelect={handleSelectSprints} selectedSprints={settings.selectedSprints} />
           <Button 
-            onClick={handleFetchMetrics} 
-            disabled={loading || selectedSprints.length === 0}
+            onClick={fetchMetricsData} 
+            disabled={loading || settings.selectedSprints.length === 0}
           >
             {loading ? 'Fetching...' : 'Fetch Metrics'}
           </Button>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)}>
-          <Settings className="h-4 w-4" />
+          <SettingsIcon className="h-4 w-4" />
         </Button>
       </div>
       <SelectedSprintChips 
-        selectedSprints={selectedSprints} 
+        selectedSprints={settings.selectedSprints} 
         onRemove={handleRemoveSprint}
       />
       {loading && (
@@ -240,14 +189,14 @@ export default function SprintMetrics() {
         <div className="space-y-4">
           <SprintSummary 
             summary={calculateSummary(metrics)} 
-            visibleColumns={visibleColumns}
+            visibleColumns={settings.visibleColumns}
             onColumnToggle={handleColumnToggle}
           />
           <div className="mt-4">
             <TeamMetricsTable 
               metrics={metrics} 
-              visibleColumns={visibleColumns} 
-              showIndividualContributions={showIndividualContributions}
+              visibleColumns={settings.visibleColumns} 
+              showIndividualContributions={settings.showIndividualContributions}
             />
           </div>
         </div>
@@ -255,9 +204,6 @@ export default function SprintMetrics() {
       <SettingsModal 
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        showIndividualContributions={showIndividualContributions}
-        onToggleIndividualContributions={() => setShowIndividualContributions((prev) => !prev)}
-        initialEnvVars={initialEnvVars}
       />
     </div>
   )

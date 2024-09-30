@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useMemo } from 'react';
 import { Metrics, MetricDataPoint } from '@/types/metrics';
 import {
@@ -13,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ArrowUpDown, ChevronDown, ChevronRight, Download } from "lucide-react";
 import DetailedMetricsView from '@/components/DetailedMetricsView';
 import { cn } from "@/lib/utils";
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface TeamMetricsTableProps {
   metrics: Metrics;
@@ -55,10 +58,11 @@ const metricKeyMapping: Record<keyof Omit<TeamMemberMetrics, 'name'>, keyof Metr
   subTaskCount: 'subTaskCount',
 };
 
-export default function TeamMetricsTable({ metrics, visibleColumns, showIndividualContributions }: TeamMetricsTableProps) {
+export default function TeamMetricsTable({ metrics, visibleColumns }: TeamMetricsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('pointsCompleted');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedRow, setExpandedRow] = useState<{ member: string, metric: keyof Metrics, issueType?: string } | null>(null);
+  const { settings } = useSettings();
 
   const calculateMetrics = (teamMember: string): TeamMemberMetrics => {
     const calculateMetric = (metricArray: MetricDataPoint[], defaultValue: number = 0) => {
@@ -172,7 +176,7 @@ export default function TeamMetricsTable({ metrics, visibleColumns, showIndividu
 
   const exportToCSV = () => {
     const headers = ['Team Member', ...visibleColumns.map(formatColumnName)];
-    const rows = showIndividualContributions
+    const rows = settings.showIndividualContributions
       ? sortedTeamMemberMetrics.map(member => [
           member.name,
           ...visibleColumns.map(col => {
@@ -246,7 +250,7 @@ export default function TeamMetricsTable({ metrics, visibleColumns, showIndividu
           </TableRow>
         </TableHeader>
         <TableBody>
-          {showIndividualContributions && sortedTeamMemberMetrics.map((member) => (
+          {settings.showIndividualContributions && sortedTeamMemberMetrics.map((member) => (
             <React.Fragment key={member.name}>
               <TableRow>
                 <TableCell className="w-1/6 font-medium">{member.name}</TableCell>

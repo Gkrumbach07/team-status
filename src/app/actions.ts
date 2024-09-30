@@ -5,26 +5,35 @@ import JiraApi from 'jira-client'
 import { Metrics, MetricDataPoint } from '@/types/metrics'
 import { addDays, format } from 'date-fns';
 
+interface Settings {
+	GITHUB_TOKEN: string;
+	JIRA_ACCESS_TOKEN: string;
+	JIRA_HOST: string;
+	GITHUB_OWNER: string;
+	GITHUB_REPO: string;
+	JIRA_BOARD_ID: string;
+}
+
 // Initialize GitHub client
-const octokit = new Octokit({
-	auth: process.env.GITHUB_TOKEN
+const createOctokit = (settings: Settings) => new Octokit({
+	auth: settings.GITHUB_TOKEN
 })
 
 // Initialize Jira client
-const jira = new JiraApi({
+const createJiraClient = (settings: Settings) => new JiraApi({
 	protocol: 'https',
-	host: process.env.JIRA_HOST || '',
-	bearer: process.env.JIRA_ACCESS_TOKEN,
+	host: settings.JIRA_HOST,
+	bearer: settings.JIRA_ACCESS_TOKEN,
 	apiVersion: '2',
 	strictSSL: true
 })
 
 // New action to fetch sprints from Jira
-export async function fetchSprints() {
+export async function fetchSprints(settings: Settings) {
+	const jira = createJiraClient(settings);
 	try {
 		// Fetch the specific Dashboard board
-		const dashboardBoard = await jira.getBoard(process.env.JIRA_BOARD_ID || '');
-
+		const dashboardBoard = await jira.getBoard(settings.JIRA_BOARD_ID);
 
 		if (!dashboardBoard) {
 			throw new Error('Dashboard board not found');
@@ -76,7 +85,8 @@ async function processMetrics(
 	jiraIssues: JiraIssue[],
 	pullRequests: (RestEndpointMethodTypes["pulls"]["get"]["response"]["data"] & { reviewComments: RestEndpointMethodTypes["pulls"]["listReviewComments"]["response"]["data"] })[],
 	sprintDetails: { id: number; name: string }[],
-	allDates: string[]
+	allDates: string[],
+	settings: Settings
 ): Promise<Metrics> {
 	const metrics: Metrics = {
 		pointsCompleted: [],
@@ -111,7 +121,7 @@ async function processMetrics(
 		const assignee = issue.fields.assignee?.displayName || 'Unassigned';
 		const sprintId = issue.sprintId || 'Unknown';
 		const prUrl = issue.fields.customfield_12310220?.[0];
-		const pr = (prUrl && prUrl.startsWith(`https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/pull/`)) ? prMap[parseInt(prUrl.split('/').pop() || '')] : undefined;
+		const pr = (prUrl && prUrl.startsWith(`https://github.com/${settings.GITHUB_OWNER}/${settings.GITHUB_REPO}/pull/`)) ? prMap[parseInt(prUrl.split('/').pop() || '')] : undefined;
 
 		// Update each metric push to include date, title, and prTitle
 		const pushMetric = (metricArray: MetricDataPoint[], value?: number, overrideTeamMember?: string) => {
@@ -214,9 +224,10 @@ async function processMetrics(
 			}
 
 			// Fetch regular comments for the PR
+			const octokit = createOctokit(settings);
 			const { data: regularComments } = await octokit.issues.listComments({
-				owner: process.env.GITHUB_OWNER || '',
-				repo: process.env.GITHUB_REPO || '',
+				owner: settings.GITHUB_OWNER,
+				repo: settings.GITHUB_REPO,
 				issue_number: pr.number
 			});
 
@@ -274,7 +285,9 @@ async function processMetrics(
 	return metrics;
 }
 
-export async function fetchMetrics(sprints: string[]): Promise<ReadableStream<Uint8Array>> {
+export async function fetchMetrics(sprints: string[], settings: Settings): Promise<ReadableStream<Uint8Array>> {
+	const jira = createJiraClient(settings);
+	const octokit = createOctokit(settings);
 	const encoder = new TextEncoder();
 
 	return new ReadableStream({
@@ -282,7 +295,7 @@ export async function fetchMetrics(sprints: string[]): Promise<ReadableStream<Ui
 			try {
 				// Fetch all Jira issues for the given sprints
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Fetching Jira issues' }) + '\n'));
-				const jiraIssues = await fetchAllJiraIssues(sprints);
+				const jiraIssues = await fetchAllJiraIssues(sprints, settings);
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Jira issues fetched', progress: 20 }) + '\n'));
 
 				// Fetch sprint details
@@ -299,7 +312,7 @@ export async function fetchMetrics(sprints: string[]): Promise<ReadableStream<Ui
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Collecting PR URLs' }) + '\n'));
 				const prUrls = jiraIssues
 					.map(issue => issue.fields.customfield_12310220?.[0])
-					.filter(url => url && url.startsWith(`https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/pull/`)) as string[];
+					.filter(url => url && url.startsWith(`https://github.com/${settings.GITHUB_OWNER}/${settings.GITHUB_REPO}/pull/`)) as string[];
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'PR URLs collected', progress: 60 }) + '\n'));
 
 				// Fetch GitHub PRs
@@ -312,13 +325,13 @@ export async function fetchMetrics(sprints: string[]): Promise<ReadableStream<Ui
 					}
 					try {
 						const { data: pr } = await octokit.pulls.get({
-							owner: process.env.GITHUB_OWNER || '',
-							repo: process.env.GITHUB_REPO || '',
+							owner: settings.GITHUB_OWNER,
+							repo: settings.GITHUB_REPO,
 							pull_number: prNumber
 						});
 						const { data: reviewComments } = await octokit.pulls.listReviewComments({
-							owner: process.env.GITHUB_OWNER || '',
-							repo: process.env.GITHUB_REPO || '',
+							owner: settings.GITHUB_OWNER,
+							repo: settings.GITHUB_REPO,
 							pull_number: prNumber
 						});
 						return { ...pr, reviewComments };
@@ -332,7 +345,7 @@ export async function fetchMetrics(sprints: string[]): Promise<ReadableStream<Ui
 
 				// Process and combine the data
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Processing metrics' }) + '\n'));
-				const metrics = await processMetrics(jiraIssues, validPullRequests, sprintDetails.map(s => ({ id: s.id, name: s.name })), allDates);
+				const metrics = await processMetrics(jiraIssues, validPullRequests, sprintDetails.map(s => ({ id: s.id, name: s.name })), allDates, settings);
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Metrics processed', progress: 100, metrics }) + '\n'));
 
 				controller.close();
@@ -344,7 +357,8 @@ export async function fetchMetrics(sprints: string[]): Promise<ReadableStream<Ui
 	});
 }
 
-async function fetchAllJiraIssues(sprints: string[]): Promise<JiraIssue[]> {
+async function fetchAllJiraIssues(sprints: string[], settings: Settings): Promise<JiraIssue[]> {
+	const jira = createJiraClient(settings);
 	const allIssues: JiraIssue[] = [];
 	const maxResultsPerRequest = 100; // Increase this to reduce the number of API calls, max is 100
 
