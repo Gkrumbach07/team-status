@@ -286,9 +286,9 @@ async function processMetrics(
 }
 
 export async function fetchMetrics(sprints: string[], settings: Settings): Promise<ReadableStream<Uint8Array>> {
+	const encoder = new TextEncoder();
 	const jira = createJiraClient(settings);
 	const octokit = createOctokit(settings);
-	const encoder = new TextEncoder();
 
 	return new ReadableStream({
 		async start(controller) {
@@ -346,8 +346,17 @@ export async function fetchMetrics(sprints: string[], settings: Settings): Promi
 				// Process and combine the data
 				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Processing metrics' }) + '\n'));
 				const metrics = await processMetrics(jiraIssues, validPullRequests, sprintDetails.map(s => ({ id: s.id, name: s.name })), allDates, settings);
-				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Metrics processed', progress: 100, metrics }) + '\n'));
 
+				// Ensure the final metrics are sent
+				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Metrics processed', progress: 99, metrics }) + '\n'));
+
+				// Add a small delay before closing the stream
+				await new Promise(resolve => setTimeout(resolve, 100));
+
+				// Send a final message to indicate completion
+				controller.enqueue(encoder.encode(JSON.stringify({ status: 'Complete', progress: 100 }) + '\n'));
+
+				// Close the stream
 				controller.close();
 			} catch (error) {
 				console.error('Error fetching metrics:', error);
