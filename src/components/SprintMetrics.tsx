@@ -12,6 +12,7 @@ import { Metrics, SprintSummary as SprintSummaryType } from '@/types/metrics'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { useSettings } from '@/contexts/SettingsContext';
 import { InitialSetup } from './InitialSetup'
+import { useAuthHeaders } from '@/utils/authHeaders'
 
 interface Sprint {
   value: string;
@@ -25,8 +26,9 @@ export default function SprintMetrics() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('');
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings } = useSettings()
 
+  const authHeaders = useAuthHeaders();
   const areSettingsConfigured = () => {
     return !!(
       settings.GITHUB_TOKEN &&
@@ -49,6 +51,7 @@ export default function SprintMetrics() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify({
           sprints: settings.selectedSprints.map(sprint => sprint.value),

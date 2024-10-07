@@ -7,22 +7,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSettings } from '@/contexts/SettingsContext';
+import { useAccessToken } from '@/contexts/AccessTokenContext';
 
 export function SettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { settings, updateSettings } = useSettings();
+  const { githubToken, jiraAccessToken, setGithubToken, setJiraAccessToken } = useAccessToken();
   const [localSettings, setLocalSettings] = useState(settings);
+  const [localGithubToken, setLocalGithubToken] = useState(githubToken);
+  const [localJiraAccessToken, setLocalJiraAccessToken] = useState(jiraAccessToken);
 
   useEffect(() => {
     setLocalSettings(settings);
-  }, [settings]);
+    setLocalGithubToken(githubToken);
+    setLocalJiraAccessToken(jiraAccessToken);
+  }, [settings, githubToken, jiraAccessToken]);
 
   const handleSave = () => {
     updateSettings(localSettings);
+    setGithubToken(localGithubToken);
+    setJiraAccessToken(localJiraAccessToken);
     onClose();
   };
 
   const handleInputChange = (key: string, value: string) => {
-    setLocalSettings({ ...localSettings, [key]: value });
+    if (key === 'GITHUB_TOKEN') {
+      setLocalGithubToken(value);
+    } else if (key === 'JIRA_ACCESS_TOKEN') {
+      setLocalJiraAccessToken(value);
+    } else {
+      setLocalSettings({ ...localSettings, [key]: value });
+    }
   };
 
   const handleCheckboxChange = (checked: boolean) => {
@@ -48,7 +62,7 @@ export function SettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Settings</DialogTitle>
           <DialogDescription>
-            Configure your integration settings. These values are stored in your browser&apos;s local storage for convenience.
+            Configure your integration settings. Access tokens are stored in memory for security.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -77,10 +91,11 @@ export function SettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
                 </Label>
                 <Input
                   id={key}
-                  value={value as string}
+                  value={key === 'GITHUB_TOKEN' ? localGithubToken : key === 'JIRA_ACCESS_TOKEN' ? localJiraAccessToken : value as string}
                   onChange={(e) => handleInputChange(key, e.target.value)}
                   className="col-span-3"
                   placeholder={placeholders[key as keyof typeof placeholders]}
+                  type={key.includes('TOKEN') ? 'password' : 'text'}
                 />
               </div>
             );
